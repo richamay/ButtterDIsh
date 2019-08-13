@@ -1,17 +1,36 @@
 // thermistor header
-// which analog pin to connect
-#define THERMISTORPIN A0
+// define for internal
 // resistance at 25 degrees C
-#define THERMISTORNOMINAL 10000
+#define INTERNAL_THERMISTORNOMINAL 10000
 // temp. for nominal resistance (almost always 25 C)
-#define TEMPERATURENOMINAL 25
+#define INTERNAL_TEMPERATURENOMINAL 25
+// The beta coefficient of the thermistor (usually 3000-4000)
+#define INTERNAL_BCOEFFICIENT 3950
+// the value of the 'other' resistor
+#define INTERNAL_SERIESRESISTOR 10015
+#ifdef ESP8266
+#define FULL_SCALE_CORR 0.3125 / 0.33333 //correction for full scale problem in ESP8266
+#define MISC_CORR 14900.0 / 12755.0 //correction for other factors
+#else
+#define INTERNAL_FULL_SCALE_CORR 1 //correction for full scale problem in ESP8266
+#define INTERNAL_MISC_CORR 1 //correction for other factors
+
+#endif
+
+// define for Other
+// resistance at 25 degrees C
+#define OTHER_THERMISTORNOMINAL 10000
+// temp. for nominal resistance (almost always 25 C)
+#define OTHER_TEMPERATURENOMINAL 25
+// The beta coefficient of the thermistor (usually 3000-4000)
+#define OTHER_BCOEFFICIENT 3950
+// the value of the 'other' resistor
+#define OTHER_SERIESRESISTOR 10015
+
+
 // how many samples to take and average, more takes longer
 // but is more 'smooth'
 #define NUMSAMPLES 5
-// The beta coefficient of the thermistor (usually 3000-4000)
-#define BCOEFFICIENT 3950
-// the value of the 'other' resistor
-#define SERIESRESISTOR 10015
 
 int samples[NUMSAMPLES];
 

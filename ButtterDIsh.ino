@@ -1,6 +1,6 @@
 /******************************************************************************************
 
-   Butter Dish Development Application
+   Butter Dish Development Application - SD Card recording version
 
 *******************************************************************************************
   This application helps develop the final version of the butterdish software
@@ -23,6 +23,7 @@
 #ifndef LED_BUILTIN
 #define LED_BUILTIN 16
 #endif // !LED_BUILTIN
+#define USE_SD  // use SD card recording
 
 //#define TEST // comment this out to run in production mode.  Otherwise injects stubs here and there
 
@@ -30,6 +31,11 @@
 //#define BLYNK_PRINT Serial
 
 
+#ifdef USE_SD
+#include <sd_diskio.h>
+#include <sd_defines.h>
+#include <SD.h>
+#endif
 #ifdef ESP32
 #include <BlynkSimpleEsp32.h>
 #endif
@@ -45,6 +51,10 @@
 #define INTERNAL_TEMP_THERMISTOR  // define this if using thermistor, otherwise choose DALLAS
 //#define INTERNAL_TEMP_DALLAS
 #define AMBIENT_TEMP_DALLAS
+
+#define OTHER_TEMP_THERMISTOR  // define this if using thermistor, otherwise choose DALLAS
+//#define OTHER_TEMP_DALLAS
+
 #ifdef DALLAS
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -52,8 +62,8 @@
 
 #ifdef THERMISTOR
 #include "thermistor.h"
-#define FULL_SCALE_CORR 0.3125 / 0.33333 //correction for full scale problem in ESP8266
-#define MISC_CORR 14900.0 / 12755.0 //correction for other factors
+#define INTERNAL_FULL_SCALE_CORR 0.3125 / 0.33333 //correction for full scale problem in ESP8266
+#define INTERNAL_MISC_CORR 14900.0 / 12755.0 //correction for other factors
 #endif
 
 #ifdef DALLAS
@@ -80,6 +90,10 @@ char ssid[] = MY_SSID;
 char pass[] = PASS;
 WiFiClient client;
 
+
+//
+// sql server set up
+//
 #ifdef USE_SQL
 // sql server set up
 #include <MySQL_Connection.h>
@@ -88,12 +102,15 @@ WiFiClient client;
 #ifndef SERVER_ADDR
 #define SERVER_ADDR "0.0.0.0"
 #endif
+
 #ifndef USER
 #define USER ""
 #endif
+
 #ifndef PASSWORD
 #define PASSWORD ""
 #endif
+
 char user[] = USER;              // MySQL user login username
 char password[] = PASSWORD;        // MySQL user login password
 // Sample query
@@ -104,7 +121,7 @@ char ambient_temp[10];
 char power_setting[10];
 IPAddress server_addr(SERVER_ADDR); // IP of the MySQL *server* here
 MySQL_Connection conn((Client *)&client);
-#endif
+#endif //USE_SQL
 
 
 /***********************************************************
@@ -147,9 +164,9 @@ static String last_command = ""; //for command parsing
 
 
 #ifdef THERMISTOR
-#define THERMISTORPIN A0
-#define FULL_SCALE_CORR 0.3125 / 0.33333 //correction for full scale problem in ESP8266
-#define MISC_CORR 14900.0 / 12755.0 //correction for other factors
+#define INTERNAL_THERMISTORPIN A0 //ADC0
+#define OTHER_THERMISTORPIN A18 //ADC18
+
 #endif
 
 #ifdef DALLAS
@@ -194,12 +211,13 @@ String cover_string[] = { "On", "Off", "Uncertain"};
 
 struct Butter_Dish
 {
-  Status status;
-  Cover_position cover;
-  float internal_temp;
-  float ambient_temp;
-  float power_setting;
-  String status_string;
+	Status status;
+	Cover_position cover;
+	float internal_temp;
+	float ambient_temp;
+	float other_temp; // for testing only
+	float power_setting;
+	String status_string;
 };
 
 Butter_Dish dish;
@@ -209,7 +227,7 @@ Butter_Dish dish;
 ***********************************/
 
 String dish_object_string();
-void display_dish_object ();
+void display_dish_object();
 void terminal_status_update();
 
 /*************************************
@@ -224,8 +242,8 @@ float get_internal_temp() {
 #endif
 
 #ifdef INTERNAL_TEMP_THERMISTOR
-  dish.internal_temp = get_raw_temp(THERMISTORPIN, THERMISTORNOMINAL, TEMPERATURENOMINAL, NUMSAMPLES, BCOEFFICIENT, SERIESRESISTOR, FULL_SCALE_CORR, MISC_CORR);
-  return dish.internal_temp;
+	dish.internal_temp = get_raw_temp(INTERNAL_THERMISTORPIN, INTERNAL_THERMISTORNOMINAL, INTERNAL_TEMPERATURENOMINAL, NUMSAMPLES, INTERNAL_BCOEFFICIENT, INTERNAL_SERIESRESISTOR, INTERNAL_FULL_SCALE_CORR, INTERNAL_MISC_CORR);
+	return dish.internal_temp;
 #else
   //TODO add a Dallas measure return here
   return 999.99;
@@ -250,6 +268,21 @@ float get_ambient_temp() {
 #endif
 }
 
+float get_other_temp() {
+	// get internal temp.  Store in Butter_Dish and return as float
+#ifdef TEST
+	dish.other_temp = 333.33;
+	return dish.other_temp;
+#endif
+
+#ifdef OTHER_TEMP_THERMISTOR
+	dish.other_temp = get_raw_temp(OTHER_THERMISTORPIN, OTHER_THERMISTORNOMINAL, OTHER_TEMPERATURENOMINAL, NUMSAMPLES, OTHER_BCOEFFICIENT, OTHER_SERIESRESISTOR, 1, 1);
+	return dish.other_temp;
+#else
+	//TODO add a Dallas measure return here
+	return 999.99;
+#endif
+}
 #ifdef USE_SQL
 void record_status_sql(char* record_type, int mSec, char* message = "")
 {
@@ -289,7 +322,7 @@ void record_status_sql(char* record_type, int mSec, char* message = "")
 }
 #endif
 
-void set_power_setting() {
+void change_power_setting() {
   // come here to change the power setting
   // for now, just return a random number and update status
 #ifdef TEST
@@ -360,12 +393,13 @@ void scan_status()
 
 //  Serial.println("scan_status");
 
-  //  get temperatures
-  get_internal_temp();
-  get_ambient_temp();
+	//  get temperatures
+	get_other_temp();
+	get_internal_temp();
+	get_ambient_temp();
 
   // decide what to do about them
-  set_power_setting();
+  change_power_setting();
   //update status string
   dish.status_string = status_string[dish.status];
 
@@ -597,7 +631,7 @@ void setup()
   //  Serial.print(" Auth key: ");
 
   sensors.begin(); //start up the sensors
-#if USE_SQL
+#ifdef USE_SQL
 record_status_sql("Test Start", millis(), ""); //start the database record
 #endif // USE_SQL  
 }
