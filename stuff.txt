@@ -1,0 +1,19 @@
+-- CREATE DATABASE test_arduino;
+CREATE TABLE test_arduino.test_result (
+uid integer primary key auto_increment,
+recorded timestamp,
+test_name char(40),
+record_type char(40),
+ambient_temp float,
+internal_temp float,
+other_temp float,
+power_setting float,
+mSec int,
+status char(40),
+cover char(40),
+message char(40)
+);
+
+INSERT INTO test_arduino.test_result (test_name, record_type, ambient_temp, internal_temp, power_setting, mSec, status, cover, message) VALUES ('First test','Update',666.7,555.5, 0.0,23244,,On,regular update);
+
+INSERT INTO test_arduino.test_result (test_name, record_type, ambient_temp, internal_temp, power_setting, mSec, status, cover, message) VALUES ('First test','Update',666.7,555.5, 0.0,23244,'','On','regular update');
